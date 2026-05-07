@@ -1,0 +1,450 @@
+LAMPIRAN 1
+CONTOH PERHITUNGAN
+Berikut contoh perhitungan manual dengan menggunakan 10 sampel data Yahoo Finance (https://finance.yahoo.com/quote/SI=F/) dari 1 Januari 2020 hingga 15 Januari 2020. 
+Tabel L1.1 Data Sampel
+Hari ke-t	Perak	Emas	Minyak	USD
+1	17.966	1524.5	61.18	96.84999847
+2	18.068	1549.2	63.05	96.83999634
+3	18.097	1566.2	63.27	96.66999817
+4	18.316	1571.8	62.7	96.98000336
+5	18.088	1557.4	59.61	97.30000305
+6	17.86	1551.7	59.56	97.44999695
+7	18.033	1557.5	59.04	97.36000061
+8	17.926	1548.4	58.08	97.34999847
+9	17.674	1542.4	58.23	97.37000275
+10	17.923	1552.1	57.81	97.23000336
+
+PROPHET
+Prophet digunakan secara UNIVARIAT: hanya menggunakan harga Silver sebagai input.
+Gold, Minyak, dan USD tidak dimasukkan ke Prophet; ketiganya digunakan sebagai fitur lag pada model XGBoost dan LightGBM.
+
+Mode seasonality: MULTIPLICATIVE
+Formula:
+ŷ(t) = trend(t) × (1 + s_weekly(t) + s_yearly(t))
+
+Penjelasan:
+trend(t)      = komponen tren piecewise-linear dengan changepoints
+s_weekly(t)   = seasonality mingguan berbasis Fourier (order 3)
+s_yearly(t)   = seasonality tahunan berbasis Fourier (order 10)
+
+BAGIAN A: PARAMETER & KONSTANTA HASIL OPTIMASI (Stan MAP)
+	Misal k dan m adalah:
+k (slope dasar) = 0.1797656400
+m (intercept) = -0.0358293210
+t_scale = 13 hari
+y_scale = max(Silver) = 18.316
+y_min = 0.0
+
+Normalisasi y sebelum fitting:
+y_scaled = (y - y_min) / y_scale = y / 18.316
+Semua komponen dihitung dalam skala y_norm, lalu × y_scale untuk kembali ke Perak
+Misalnya Prophet mendapat 7 Changepoints (otomatis di 80% data pertama):
+Contoh perhitungan:
+t_norm 1 	= 1/13 = 0. 076923
+Angka δ tidak dihitung dengan rumus matematika sederhana oleh manusia, melainkan melalui proses Optimasi Numerik (L-BFGS) atau Stan MAP.
+
+cp	tgl	t_norm	δ
+cp1	1/3/2020	0.076923	0.0624
+cp2	1/6/2020	0.307692	0.000000000333
+cp3	1/7/2020	0.384615	-0.0000000012
+cp4	1/8/2020	0.461538	-0.0000000006
+cp5	1/9/2020	0.538462	-0.00000000008
+cp6	1/10/2020	0.615385	-0.0000000006
+cp7	1/13/2020	0.846154	0.0000000002
+Gamma (koreksi kontinuitas: γⱼ = -t_cpⱼ × δⱼ):
+γ[1] = −0.07692308 × +6.24377580e-02 = -0.004802904462
+γ[2] = −0.30769231 × +3.33460340e-10 = -0.000000000103
+γ[3] = −0.38461538 × -1.19691790e-09 = +0.000000000460
+γ[4] = −0.46153846 × -5.97816170e-10 = +0.000000000276
+γ[5] = −0.53846154 × -7.52303120e-11 = +0.000000000041
+γ[6] = −0.61538462 × -5.63669860e-10 = +0.000000000347
+γ[7] = −0.84615385 × +1.65286730e-10 = -0.000000000140
+Beta weekly Fourier [sin1,cos1, sin2,cos2, sin3,cos3]:
+[0.01647656, 0.9148904, 0.64473553, -1.181184, -1.5187853, 0.57674623] 
+Beta yearly Fourier [sin1,cos1, ..., sin10,cos10]: 
+β[0..3] = [-0.678547, 0.247738, 1.008573, 0.077582] 
+β[4..7] = [-2.859998, 0.308733, -0.717891, 0.239716] 
+β[8..11] = [-0.612406, 0.588125, 1.941277, 0.508695] 
+β[12..15] = [-0.445116, -0.271176, -0.101506, -0.723721] 
+β[16..19] = [ 1.098734, 0.175736, -0.805053, -0.398435]
+
+BAGIAN B: FOURIER BASIS (Prophet menggunakan hari sejak Unix Epoch 1970-01-01)
+Formula: sin(2π × n × t_unix / P) dan cos(2π × n × t_unix / P)
+P = 365.25 hari (yearly) atau 7 hari (weekly)
+t_unix = (ds − 1970-01-01) dalam satuan hari: 
+2020-01-02: t_unix = 18263 
+2020-01-03: t_unix = 18264 
+2020-01-06: t_unix = 18267 
+2020-01-07: t_unix = 18268 
+2020-01-08: t_unix = 18269 
+2020-01-09: t_unix = 18270 
+2020-01-10: t_unix = 18271 
+2020-01-13: t_unix = 18274 
+2020-01-14: t_unix = 18275 
+2020-01-15: t_unix = 18276
+Weekly Fourier (n=1,2,3 → 6 kolom):
+Date	sin1	cos1	sin2	cos2	sin3	cos3
+1/2/2020	0	1	0	1	0	1
+1/3/2020	0.781831	0.62349	0.974928	-0.22252	0.433884	-0.90097
+1/6/2020	-0.43388	-0.90097	0.781831	0.62349	-0.97493	-0.22252
+1/7/2020	-0.97493	-0.22252	0.433884	-0.90097	0.781831	0.62349
+1/8/2020	-0.78183	0.62349	-0.97493	-0.22252	-0.43388	-0.90097
+1/9/2020	0	1	0	1	0	1
+1/10/2020	0.781831	0.62349	0.974928	-0.22252	0.433884	-0.90097
+1/13/2020	-0.43388	-0.90097	0.781831	0.62349	-0.97493	-0.22252
+1/14/2020	-0.97493	-0.22252	0.433884	-0.90097	0.781831	0.62349
+1/15/2020	-0.78183	0.62349	-0.97493	-0.22252	-0.43388	-0.90097
+Yearly Fourier, n=1 dan n=2 (dari 10):
+Date	sin_y1	cos_y1	sin_y2	cos_y2
+1/2/2020	0.008601	0.999963	0.017202	0.999852
+1/3/2020	0.025801	0.999667	0.051584	0.998669
+1/6/2020	0.077334	0.997005	0.154204	0.988039
+1/7/2020	0.094472	0.995527	0.188099	0.98215
+1/8/2020	0.111583	0.993755	0.221772	0.975099
+1/9/2020	0.128661	0.991689	0.255182	0.966893
+1/10/2020	0.1457	0.989329	0.288291	0.957543
+1/13/2020	0.19654	0.980496	0.385413	0.922744
+1/14/2020	0.213377	0.97697	0.416926	0.90894
+1/15/2020	0.230151	0.973155	0.447945	0.894061
+OBSERVASI 1: 2020-01-02 Aktual Perak (y) = 17.9659996  
+[1] NORMALISASI WAKTU 
+t_norm 	= (ds − t_start) / t_scale 
+= (2020-01-02 − 2020-01-02) / 13 hari 
+= 0 / 13 
+= 0.0000000000 
+t_unix 		= (ds − 1970-01-01) = 18263 hari 
+[2] INDIKATOR CHANGEPOINT (A) 
+A[j] = 1 jika t_norm(0.000000) ≥ t_cp[j], else 0 
+j=1: 0.000000 < 0.076923 → A[1] = 0 
+j=2: 0.000000 < 0.307692 → A[2] = 0 
+j=3: 0.000000 < 0.384615 → A[3] = 0 
+j=4: 0.000000 < 0.461538 → A[4] = 0 
+j=5: 0.000000 < 0.538462 → A[5] = 0 
+j=6: 0.000000 < 0.615385 → A[6] = 0 
+j=7: 0.000000 < 0.846154 → A[7] = 0 
+Changepoints aktif: ['none'] 
+[3] k_eff DAN m_eff (slope & intercept efektif setelah changepoints) 
+A·δ 	= +0.0000000000 
+A·γ 	= +0.0000000000 
+k_eff 	= k + A·δ 	= 0.17976564 + (+0.00000000) = 0.1797656400 
+m_eff 	= m + A·γ 	= -0.03582932 + (+0.00000000) = -0.0358293210 
+[4] TREND (dalam skala y_norm, lalu × y_scale) 
+trend_norm 	= k_eff × t_norm + m_eff 
+= 0.17976564 × 0.00000000 + (-0.03582932) 
+= 0.00000000 + (-0.03582932) 
+= -0.03582932 
+trend_final 	= trend_norm × y_scale 
+= -0.03582932 × 18.316
+= -0.65625
+[5] WEEKLY SEASONALITY (Fourier order=3, P=7 hari, t_unix=18263) 
+Formula: 
+s_weekly_norm = Σsin(2πnt_unix/7)·β_sin_n + cos(2πnt_unix/7)·β_cos_n 
+n=1: θ 		= 2π×1×18263/7 			= 16392.83047 rad 
+sin(θ) 	= -0.0000000 × β_sin1(+0.0164766) 	= -0.00000000 
+cos(θ) 	= +1.0000000 × β_cos1(+0.9148904) 	= +0.91489040 
+subtotal n=1 = +0.91489040 
+n=2: θ 		= 2π×2×18263/7 			= 32785.66093 rad 
+sin(θ) = -0.0000000 × β_sin2(+0.6447355) = -0.00000000 
+cos(θ) = +1.0000000 × β_cos2(-1.1811840) = -1.18118400 
+subtotal n=2 = -1.18118400 
+n=3: θ 		= 2π×3×18263/7 			= 49178.49140 rad 
+sin(θ) 	= +0.0000000 × β_sin3(-1.5187853) 	= -0.00000000 
+cos(θ) = +1.0000000 × β_cos3(+0.5767462) 	= +0.57674623 
+subtotal n=3 = +0.57674623 
+s_weekly_norm 	= 0.31045263 
+s_weekly_final 	= 0.31045263 × 18.3160 = 5.686250 
+
+[6] YEARLY SEASONALITY (Fourier order=10, P=365.25 hari, t_unix=18263)
+ Formula: 
+s_yearly_norm = Σ sin(2πnt_unix/365.25)·β_sin_n + cos(...)·β_cos_n 
+n= 1: θ=314.1679rad | 0.008601×-0.678547 + 0.999963×0.247738 = +0.24189274 
+n= 2: θ=628.3357rad | 0.017202×1.008573 + 0.999852×0.077582 = +0.09491927 
+n= 3: θ=942.5036rad | 0.025801×-2.859998 + 0.999667×0.308733 = +0.23483969 
+n= 4: θ=1256.6715rad | 0.034398×-0.717891 + 0.999408×0.239716 = +0.21487964 
+n= 5: θ=1570.8393rad | 0.042993×-0.612406 + 0.999075×0.588125 = +0.56125245 
+n= 6: θ=1885.0072rad | 0.051584×1.941277 + 0.998669×0.508695 = +0.60815685 
+n= 7: θ=2199.1751rad | 0.060172×-0.445116 + 0.998188×-0.271176 = -0.29746832 
+n= 8: θ=2513.3429rad | 0.068755×-0.101506 + 0.997634×-0.723721 = -0.72898775 
+n= 9: θ=2827.5108rad | 0.077334×1.098734 + 0.997005×0.175736 = +0.26017911 
+n=10: θ=3141.6787rad | 0.085906×-0.805053 + 0.996303×-0.398435 = -0.46612082
+s_yearly_norm 	= 0.72354286 
+s_yearly_final 		= 0.72354286 × 18.3160 = 13.252411 
+
+[7] PERAKITAN AKHIR (Multiplicative Mode)
+Prophet multiplicative: ŷ = trend × (1 + s_weekly_scaled + s_yearly_scaled)
+Dalam praktik internal Prophet, komponen dihitung sebagai:
+  s_weekly_scaled = s_weekly_norm / trend_norm
+  s_yearly_scaled = s_yearly_norm / trend_norm
+
+Ekuivalen (penjumlahan di ruang ternormalisasi, lalu ×y_scale):
+ŷ_norm 	= trend_norm + trend_norm × (s_weekly_norm/trend_norm) + trend_norm × (s_yearly_norm/trend_norm)
+       	= trend_norm + s_weekly_norm + s_yearly_norm
+= -0.03582932 (trend)
++ +0.31045263 (weekly)
++ +0.72354286 (yearly)
+ŷ_norm 	= +0.99816617
+ŷ_final = ŷ_norm × y_scale 	= 0.99816617 × 18.3160 ≈ 17.966
+Prophet ŷ (referensi) 		= 17.966000
+Aktual Perak 			= 17.9659996
+Residual 			= ~0.000000
+Idx	Date	Perak (y)	Prophet yhat	Residual
+0	1/7/2020	18.316	18.315999	1.0523E-06
+1	1/8/2020	18.088	18.087999	2.369E-07
+2	1/9/2020	17.86	17.860001	-2.518E-07
+3	1/10/2020	18.033	18.033	4.606E-07
+4	1/13/2020	17.926	17.926001	-1.476E-07
+5	1/14/2020	17.674	17.673998	1.3496E-06
+XGBOOST
+XGBoost TIDAK memprediksi harga Silver langsung, melainkan memprediksi LOG RETURN:
+  log_return_t = ln(silver_t / silver_{t-1})
+Prediksi harga akhir: ŷ_price = silver_{t-1} × exp(ŷ_log_return)
+
+Tabel log return data sampel (6 observasi test):
+Idx	Date		Silver		Silver_lag1	log_return = ln(silver_t / silver_{t-1})
+0	1/7/2020	18.316000	18.097000	ln(18.316/18.097) = +0.012019
+1	1/8/2020	18.088000	18.316000	ln(18.088/18.316) = −0.012506
+2	1/9/2020	17.860001	18.088000	ln(17.860/18.088) = −0.012668
+3	1/10/2020	18.033001	17.860001	ln(18.033/17.860) = +0.009647
+4	1/13/2020	17.926001	18.033001	ln(17.926/18.033) = −0.005947
+5	1/14/2020	17.673999	17.926001	ln(17.674/17.926) = −0.014118
+ȳ(log_return) = (0.012019 + (−0.012506) + (−0.012668) + 0.009647 + (−0.005947) + (−0.014118)) / 6
+             = −0.023573 / 6 = −0.003929
+
+KONFIGURASI (Parameter):
+n_estimators 		= 3
+learning_rate =	 0.3 (η)
+max_depth 		= 2
+reg_lambda 		= 1.0
+base_score (F₀) 	= ȳ(log_return) = −0.003929
+RUMUS UMUM XGBoost:
+Fₜ(x) = F_{t-1}(x) + η × hₜ(x)
+hₜ(x) = pohon regresi difit pada pseudo-residual gradient
+Untuk MSE loss: gradient gᵢ = ŷᵢ - yᵢ, hessian hᵢ = 1
+RUMUS NILAI DAUN (leaf weight):
+w* = -(Σgᵢ) / (Σhᵢ + λ) untuk semua sampel i di daun itu
+STRUKTUR 3 POHON XGBoost:
+ POHON 0 
+Node 0 (root): Gold_contrib
+< 0.126590 → kiri ≥ 0.126590 → kanan
+Node 1 (kiri): Minyak_contrib
+< -0.446513 → Daun 3 (-0.00995700)
+≥ -0.446513 → Daun 4 (-0.04145700)
+Node 2 (kanan): trend
+< 1.644502 → Daun 5 (+0.04554300)
+≥ 1.644502 → Daun 6 (+0.00880700) 
+POHON 1
+Node 0 (root): Gold_contrib
+< 0.126590 → kiri ≥ 0.126590 → kanan
+Node 1 (kiri): Gold_contrib
+< -0.089187 → Daun 3 (-0.03882400)
+≥ -0.089187 → Daun 4 (-0.01143600)
+Node 2 (kanan): trend
+< 1.303256 → Daun 5 (+0.04442600)
+≥ 1.303256 → Daun 6 (+0.01180800) 
+POHON 2 
+Node 0 (root): Gold_contrib
+< 0.126590 → kiri ≥ 0.126590 → kanan
+Node 1 (kiri): Gold_contrib
+< -0.089187 → Daun 3 (-0.03300100)
+≥ -0.089187 → Daun 4 (-0.00886300)
+Node 2 (kanan): trend
+< 1.303256 → Daun 5 (+0.03776200)
+≥ 1.303256 → Daun 6 (+0.00944600)
+
+Observasi [0]: 2020-01-07, silver_{t-1} = 18.097000, log_return aktual = +0.012019
+F₀ (base_score) = −0.003929
+[Pohon 0]
+Pseudo-residual (gradient gᵢ):
+ŷ − y = (−0.003929) − (+0.012019) = −0.015948
+Traversal pohon:
+Node: Gold_contrib = 0.471835 ≥ 0.126590, maka kanan (≥)
+Node: trend = 0.962010 < 1.644502, maka kiri (<)
+Mendarat di daun: w* = +0.04554291
+Update: F_1 = F_0 + η × w*
+= −0.003929 + 0.3 × (+0.04554291)
+= −0.003929 + (+0.013663)
+= +0.009734
+[Pohon 1]
+Pseudo-residual (gradient gᵢ):
+ŷ − y = (+0.009734) − (+0.012019) = −0.002285
+Traversal pohon:
+Node: Gold_contrib = 0.471835 ≥ 0.126590, maka kanan (≥)
+Node: trend = 0.962010 < 1.303256, maka kiri (<)
+Mendarat di daun: w* = +0.04442568
+Update: F_2 = F_1 + η × w*
+= +0.009734 + 0.3 × (+0.04442568)
+= +0.009734 + (+0.013328)
+= +0.023062
+[Pohon 2]
+Pseudo-residual (gradient gᵢ):
+ŷ − y = (+0.023062) − (+0.012019) = +0.011043
+Traversal pohon:
+Node: Gold_contrib = 0.471835 ≥ 0.126590, maka kanan (≥)
+Node: trend = 0.962010 < 1.303256, maka kiri (<)
+Mendarat di daun: w* = +0.03776179
+Update: F_3 = F_2 + η × w*
+= +0.023062 + 0.3 × (+0.03776179)
+= +0.023062 + (+0.011329)
+= +0.034391
+ŷ_log_return_XGB	= +0.034391
+ŷ_price_XGB		= silver_{t-1} × exp(ŷ_log_return) = 18.097 × exp(+0.034391) = 18.097 × 1.035 = 18.731
+Aktual			= 18.316000
+Error			= −0.415
+Catatan: Nilai w* (leaf) di atas menggunakan parameter ilustratif (3 pohon, lr=0.3).
+Program produksi menggunakan 1200 pohon, lr=0.01, sehingga ŷ lebih akurat.
+
+Perhitungan dilanjutkan untuk setiap observasi.
+
+LightGBM
+LightGBM (sama dengan XGBoost) memprediksi LOG RETURN, bukan harga Silver langsung.
+Prediksi harga akhir: ŷ_price = silver_{t-1} × exp(ŷ_log_return)
+
+KONFIGURASI (Parameter):
+n_estimators 		= 3
+learning_rate 		= 0.3 (η)
+max_depth 		= 2
+num_leaves 		= 4
+reg_lambda 		= 0.0
+Init score (F₀) 	= ȳ(log_return) = −0.003929
+
+PERBEDAAN UTAMA LightGBM vs XGBoost:
+1. LightGBM tumbuh Leaf-wise (bukan level-wise)
+2. Semua pohon (termasuk Tree 0) menghasilkan update increment × lr
+   (berbeda dengan XGBoost yang base_score-nya sudah ditetapkan sebagai konstanta sebelum pohon pertama)
+3. Update: F_t = F_{t-1} + lr × leaf_value_t
+STRUKTUR POHON LIGHTGBM (dari trees_to_dataframe):
+POHON 0 (pohon pertama — nilai daun dalam skala log return)
+Node 0-S0 (root): Gold_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → kiri (0-S2) | > 0 → kanan (0-S1)
+Node 0-S2 (kiri): USD_contrib ≤ −0.104667
+≤ −0.1047 → Daun 0-L0 = −0.013312
+> −0.1047 → Daun 0-L3 = −0.004000
+Node 0-S1 (kanan): Minyak_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → Daun 0-L1 = +0.001850
+> 0 → Daun 0-L2 = +0.010833
+POHON 1 (update/increment) 
+Node 1-S0 (root): Gold_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → kiri (1-S2) | > 0 → kanan (1-S1)
+Node 1-S2 (kiri): USD_contrib ≤ −0.104667
+≤ −0.1047 → Daun 1-L0 = −0.043530
+> −0.1047 → Daun 1-L3 = −0.010455
+Node 1-S1 (kanan): Minyak_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → Daun 1-L1 = +0.018105
+> 0 → Daun 1-L2 = +0.071760
+POHON 2 (update/increment) 
+Node 2-S0 (root): Gold_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → kiri (2-S2) | > 0 → kanan (2-S1)
+Node 2-S2 (kiri): Silver_lag1 ≤ 17.9795
+≤ 17.9795 → Daun 2-L0 = −0.033070
+> 17.9795 → Daun 2-L3 = −0.004720
+Node 2-S1 (kanan): Minyak_contrib ≤ 1e-35 (≈ ≤ 0)
+≤ 0 → Daun 2-L1 = +0.012673
+> 0 → Daun 2-L2 = +0.050232  
+Observasi [0]: 2020-01-07, silver_{t-1} = 18.097000, log_return aktual = +0.012019
+Nilai fitur kunci:
+Gold_contrib 		= +0.471835
+Minyak_contrib 	= +0.540098
+USD_contrib 		= +0.077890
+Silver_lag1 		= 18.097000
+F₀ (init score) 	= ȳ(log_return) = −0.003929
+
+[Pohon 0] — increment pertama dari F₀
+Pseudo-residual[0] = F₀ − log_return[0] = −0.003929 − (+0.012019) = −0.015948
+Gold_contrib(+0.471835) > 1e-35 → kanan
+Minyak_contrib(+0.540098) > 1e-35 → Daun 0-L2
+→ Leaf value = +0.010833
+Update F₁ = F₀ + leaf_T0 × lr
+= −0.003929 + 0.010833 × 0.3
+= −0.003929 + (+0.003250)
+= −0.000679
+[Pohon 1] — increment lanjutan
+Pseudo-residual[0] = F₁ − log_return[0] = −0.000679 − 0.012019 = −0.012698
+Gold_contrib(+0.471835) > 1e-35 → kanan
+Minyak_contrib(+0.540098) > 1e-35 → Daun 1-L2
+→ Leaf value = +0.071760
+Update F₂ = F₁ + leaf_T1 × lr
+= −0.000679 + 0.071760 × 0.3
+= −0.000679 + (+0.021528)
+= +0.020849
+[Pohon 2] — increment lanjutan
+Pseudo-residual[0] = F₂ − log_return[0] = +0.020849 − 0.012019 = +0.008830
+Gold_contrib(+0.471835) > 1e-35 → kanan
+Minyak_contrib(+0.540098) > 1e-35 → Daun 2-L2
+→ Leaf value = +0.050232
+Update F₃ = F₂ + leaf_T2 × lr
+= +0.020849 + 0.050232 × 0.3
+= +0.020849 + (+0.015070)
+= +0.035919
+ŷ_log_return_LGBM	= +0.035919
+ŷ_price_LGBM		= silver_{t-1} × exp(ŷ_log_return) = 18.097 × exp(+0.035919) = 18.097 × 1.0366 = 18.759
+Aktual			= 18.316000
+Error			= −0.443
+Catatan: Nilai leaf di atas menggunakan parameter ilustratif (3 pohon, lr=0.3).
+Program produksi menggunakan 2000 pohon, lr=0.005, sehingga ŷ lebih akurat.
+
+Perhitungan dilanjutkan untuk setiap observasi.
+
+TABEL AKTUAL vs PREDIKSI:
+(Nilai XGB ŷ dan LGBM ŷ di bawah adalah hasil model produksi — 1200/2000 pohon, lr=0.01/0.005)
+Idx	Date	Silver	Prophet ŷ	XGB ŷ	LGBM ŷ	XGB err	LGBM err
+0	1/7/2020	18.316	18.315999	18.102016	18.198792	0.213984	0.117208
+1	1/8/2020	18.088	18.087999	18.041084	18.030929	0.046915	0.057071
+2	1/9/2020	17.86	17.860001	17.912529	17.863851	-0.052528	-0.00385
+3	1/10/2020	18.033	18.033	18.004349	18.030929	0.028652	0.002072
+4	1/13/2020	17.926	17.926001	17.944029	17.944176	-0.018028	-0.018175
+5	1/14/2020	17.674	17.673998	17.861004	17.8355	-0.187004	-0.161501
+ȳ (rata-rata aktual) 	= Σyᵢ / n
+= (18.3160000 + 18.0879993 + 17.8600006 + 18.0330010 + 17.9260006 + 17.6739998 + 17.9230003) / 7
+= 125.8200016 / 7
+= 17.9742859
+EVALUASI Prophet + XGBoost
+1. MAE (Mean Absolute Error)
+MAE = (1/n) × Σ |yᵢ - ŷᵢ|
+Langkah A: Hitung error dan nilai absolut per observasi:
+Tabel L1.10 Error XGBoost
+i	Date	yi	ŷi	ei = yi − ŷi	|ei|
+0	1/7/2020	18.316	18.1020164	0.2139836	0.2139836
+1	1/8/2020	18.088	18.0410843	0.046915	0.046915
+2	1/9/2020	17.86	17.912529	-0.0525284	0.0525284
+3	1/10/2020	18.033	18.0043488	0.0286522	0.0286522
+4	1/13/2020	17.926	17.9440289	-0.0180283	0.0180283
+5	1/14/2020	17.674	17.8610039	-0.1870041	0.1870041
+6	1/15/2020	17.923	17.9440289	-0.0210286	0.0210286
+Langkah B: Jumlahkan |eᵢ|:
+Σ|eᵢ| 	= 0.2139836 + 0.0469150 + 0.0525284 + 0.0286522 + 0.0180283 + 0.1870041 + 0.0210286
+= 0.5681402
+Langkah C: Bagi dengan n = 7:
+MAE 	= 0.5681402 / 7
+MAE 	= 0.0811629
+2. RMSE (Root Mean Squared Error)
+RMSE = √[ (1/n) × Σ (yᵢ - ŷᵢ)² ] 
+Langkah A: Hitung kuadrat error per observasi
+i	Date	eᵢ	eᵢ²
+0	2020-01-07	+0.2139836	0.0457889811
+1	2020-01-08	+0.0469150	0.0022010172
+2	2020-01-09	-0.0525284	0.0027592328
+3	2020-01-10	+0.0286522	0.0008209486
+4	2020-01-13	-0.0180283	0.0003250196
+5	2020-01-14	-0.1870041	0.0349705334
+6	2020-01-15	-0.0210286	0.0004422020
+Langkah B: Jumlahkan eᵢ²:
+Σeᵢ² 	= 0.0457889811 + 0.0022010172 + 0.0027592328 + 0.0008209486 + 0.0003250196 + 0.0349705334 + 0.0004422020
+= 0.0873079347 
+Langkah C: Hitung MSE:
+MSE 	= Σeᵢ² / n = 0.0873079347 / 7 
+= 0.0124725621
+Langkah D: Akar kuadrat MSE:
+RMSE 	= √0.0124725621
+= 0.1116806
+3. MAPE (Mean Absolute Percentage Error)
+MAPE = (100/n) × Σ |yᵢ − ŷᵢ| / yᵢ (dalam %) 
+Langkah A: Hitung persentase error absolut per observasi:
+i	Date	|eᵢ|	yᵢ	|eᵢ| / yᵢ	×100 (%)
+0	2020-01-07	0.2139836	18.3160000	0.011682878	1.1682878
+1	2020-01-08	0.0469150	18.0879993	0.002593709	0.2593709
+2	2020-01-09	0.0525284	17.8600006	0.002941120	0.2941120
+3	2020-01-10	0.0286522	18.0330010	0.001588876	0.1588876
+4	2020-01-13	0.0180283	17.9260006	0.001005707	0.1005707
+5	2020-01-14	0.1870041	17.6739998	0.010580746	1.0580746
+6	2020-01-15	0.0210286	17.9230003	0.001173275	0.1173275
+

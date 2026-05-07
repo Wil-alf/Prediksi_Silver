@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python test_model.py)",
+      "Bash(python -c \"from models.forecaster import train_and_save, predict_from_saved, is_model_saved, get_model_status; print\\('OK - semua fungsi baru berhasil diimport'\\)\")",
+      "Bash(python tune.py --trials 50)",
+      "Bash(python *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Skripsi 2026\\\\prediksi_silver\\\\frontend\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 50)",
+      "Bash(Format-Table FullName)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Skripsi 2026\\\\prediksi_silver\\\\backend\\\\routes\" -Force | ForEach-Object { $_.Name })"
+    ]
+  }
+}

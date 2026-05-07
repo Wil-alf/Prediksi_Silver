@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.venv/
+env/
+.env
+
+# Model artifacts (bisa besar, tidak perlu di-commit)
+backend/models/saved/
+backend/models/saved_v2/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel
+
+# OS
+.DS_Store
+Thumbs.db
