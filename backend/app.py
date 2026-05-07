@@ -6,8 +6,7 @@ from routes.prediction_v2 import prediction_v2_bp
 
 app = Flask(__name__)
 
-allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-CORS(app, origins=allowed_origins)
+CORS(app)
 
 app.register_blueprint(prediction_bp, url_prefix="/api")
 app.register_blueprint(prediction_v2_bp, url_prefix="/api/v2")
