@@ -6,6 +6,7 @@ import { ChevronLeft, Play, Zap, RefreshCw, CheckCircle, AlertCircle } from "luc
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import axios from "axios";
 import {
     getModelStatusV2,
     trainModelV2,
@@ -66,8 +67,16 @@ export default function PrediksiCepatPage() {
             await trainModelV2();
             const status = await getModelStatusV2();
             setModelStatus(status);
-        } catch {
-            alert("Gagal melatih model. Pastikan backend aktif.");
+        } catch (err: unknown) {
+            let msg = "Tidak diketahui.";
+            if (axios.isAxiosError(err)) {
+                if (err.code === "ECONNABORTED") msg = "Timeout — pelatihan melebihi batas waktu koneksi.";
+                else if (err.response) msg = `Server error ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+                else msg = `Tidak dapat terhubung ke backend (${err.message}).`;
+            } else if (err instanceof Error) {
+                msg = err.message;
+            }
+            alert(`Gagal melatih model:\n${msg}`);
         } finally {
             setTraining(false);
         }
@@ -79,8 +88,16 @@ export default function PrediksiCepatPage() {
             const result = await runPredictionV2(period, endDate || undefined);
             sessionStorage.setItem("predictionResult", JSON.stringify(result));
             router.push("/hasil");
-        } catch {
-            alert("Gagal menjalankan prediksi. Pastikan backend aktif.");
+        } catch (err: unknown) {
+            let msg = "Tidak diketahui.";
+            if (axios.isAxiosError(err)) {
+                if (err.code === "ECONNABORTED") msg = "Timeout — prediksi melebihi batas waktu koneksi.";
+                else if (err.response) msg = `Server error ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+                else msg = `Tidak dapat terhubung ke backend (${err.message}).`;
+            } else if (err instanceof Error) {
+                msg = err.message;
+            }
+            alert(`Gagal menjalankan prediksi:\n${msg}`);
         } finally {
             setPredicting(false);
         }
