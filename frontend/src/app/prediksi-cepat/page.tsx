@@ -222,8 +222,7 @@ export default function PrediksiCepatPage() {
                             disabled={predicting || !modelStatus.trained || training}
                             className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-60"
                         >
-                            <Play size={16} />
-                            {predicting ? "Memproses..." : "Prediksi Cepat"}
+                            {predicting ? "Memproses..." : "Prediksi"}
                         </button>
 
                         {!modelStatus.trained && !statusLoading && (
