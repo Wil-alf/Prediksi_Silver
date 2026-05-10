@@ -1,12 +1,3 @@
-"""
-forecaster_v2.py  Train-once, predict-many.
-
-Arsitektur identik dengan run_forecast() di forecaster.py.
-Model dilatih sekali (~5 menit), disimpan ke disk, lalu dapat dipanggil
-berulang kali dalam ~5-10 detik.
-
-Untuk prediksi dari tanggal tertentu: hanya fetch data baru (tanpa retrain).
-"""
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -75,10 +66,6 @@ def get_model_status_v2() -> dict:
 
 
 def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
-    """
-    Latih model dengan arsitektur identik run_forecast() dan simpan ke disk.
-    Panggil sekali; setelah itu gunakan predict_from_saved_v2() untuk prediksi cepat.
-    """
     os.makedirs(SAVE_DIR_V2, exist_ok=True)
 
     raw = fetch_data(start_date, end_date)
@@ -105,7 +92,7 @@ def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
     )
     xgb_eval, lgbm_eval = _build_boosting_models(X_train, log_ret_train)
 
-    #  Rolling-origin evaluation on test set 
+    #  Rolling origin evaluation on test set 
     n_total     = len(df)
     silver_hist = list(df["silver"].values[:-test_size])
     gold_hist   = list(df["gold"].values)
@@ -202,12 +189,6 @@ def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
 
 
 def predict_from_saved_v2(period: int = 7, end_date: str = None) -> dict:
-    """
-    Load model dari disk dan prediksi. Tidak ada retraining.
-
-    Jika end_date diberikan: fetch data sampai tanggal itu, pakai model tersimpan.
-    Jika tidak: gunakan last_rows dari metadata.
-    """
     with open(os.path.join(SAVE_DIR_V2, "metadata.json"), encoding="utf-8") as f:
         meta = json.load(f)
 
@@ -251,7 +232,7 @@ def predict_from_saved_v2(period: int = 7, end_date: str = None) -> dict:
         .reset_index(drop=True)
     )
 
-    # Iterative prediction  each model maintains its own silver history
+    # Iterative prediction
     future_silver_hist_xgb  = list(silver_hist)
     future_silver_hist_lgbm = list(silver_hist)
     xgb_future_vals         = []

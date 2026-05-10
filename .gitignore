@@ -24,3 +24,10 @@ frontend/.vercel
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude / Agents
+.claude/
+agents.md
+claude.md
+AGENTS.md
+CLAUDE.md

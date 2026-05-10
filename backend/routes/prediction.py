@@ -10,7 +10,7 @@ prediction_bp = Blueprint("prediction", __name__)
 def predict():
     body     = request.get_json(silent=True) or {}
     period   = body.get("period", 7)
-    end_date = body.get("end_date")  # optional cutoff; None = use latest data
+    end_date = body.get("end_date")
 
     if period not in (7, 30):
         return jsonify({"error": "period harus 7 atau 30"}), 400

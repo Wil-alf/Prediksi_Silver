@@ -54,7 +54,7 @@ def fetch_data(start_date: str = None, end_date: str = None) -> pd.DataFrame:
 
 
 def _ema_arr(arr: np.ndarray, span: int) -> float:
-    """EMA over a numpy array (adjust=False convention)."""
+    """EMA over a numpy array"""
     alpha = 2.0 / (span + 1)
     ema   = float(arr[0])
     for v in arr[1:]:
@@ -75,7 +75,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             new_cols[f"{series}_roll_mean_{w}"] = df[series].rolling(w).mean()
             new_cols[f"{series}_roll_std_{w}"]  = df[series].rolling(w).std()
 
-    # Technical indicators for silver, all shifted by 1 so only t-1 data is used
+    # Technical indicators for silver
     delta    = df["silver"].diff()
     up       = delta.clip(lower=0)
     down     = (-delta).clip(lower=0)
@@ -94,7 +94,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     new_cols["silver_bb_pos"] = ((df["silver"] - roll_mean_20) / roll_std_20).shift(1)
     new_cols["silver_atr_14"] = df["silver"].diff().abs().rolling(14).mean().shift(1)
 
-    # Cross-asset ratio features (derived from original 4 variables, lagged)
+    # Cross-asset ratio features (4 variables, lagged)
     gs_ratio = df["gold"]   / df["silver"].replace(0, 1e-9)
     so_ratio = df["silver"] / df["oil"].replace(0, 1e-9)
     new_cols["gold_silver_ratio_lag_1"] = gs_ratio.shift(1)
@@ -183,7 +183,7 @@ def _feature_row(
     else:
         row["silver_rsi_14"] = 50.0
 
-    # MACD line (EMA12 - EMA26, last 100 values for warmup)
+    # MACD line
     if len(silver_arr) >= 26:
         n = min(len(silver_arr), 100)
         s = silver_arr[-n:]
@@ -216,7 +216,7 @@ def _feature_row(
     else:
         row["silver_atr_14"] = 0.0
 
-    # Cross-asset ratios (t-1 values: silver_arr[-1]=silver[t-1], gold_arr[-1]=gold[t-1])
+    # Cross-asset ratios
     sv1 = float(silver_arr[-1]) if silver_arr[-1] != 0 else 1e-9
     oi1 = float(oil_arr[-1])    if len(oil_arr) >= 1 and oil_arr[-1] != 0 else 1e-9
 
@@ -278,7 +278,7 @@ def run_forecast(period: int = 7, start_date: str = None, end_date: str = None) 
     ratio_cols    = ["gold_silver_ratio_lag_1", "gold_silver_ratio_lag_5", "silver_oil_ratio_lag_1"]
     feature_cols  = price_lag_cols + ret_lag_cols + roll_cols + calendar_cols + prophet_cols + tech_cols + ratio_cols
 
-    # EVALUATION MODEL, trained on train set only used for honest test set metrics
+    # EVALUATION MODEL
     m_eval  = _fit_prophet(train)
     ph_eval = _get_prophet_components(m_eval, df[["ds"]].copy())
     for col in ["yhat", "trend", "weekly", "yearly"]:
@@ -322,7 +322,7 @@ def run_forecast(period: int = 7, start_date: str = None, end_date: str = None) 
     xgb_final  = np.array(xgb_test_preds)
     lgbm_final = np.array(lgbm_test_preds)
 
-    # PRODUCTION MODEL, trained on ALL data, used only for future forecast
+    # PRODUCTION MODEL
     m_prod  = _fit_prophet(df)
     ph_prod = _get_prophet_components(m_prod, df[["ds"]].copy())
     df_prod = df.copy()
@@ -347,7 +347,7 @@ def run_forecast(period: int = 7, start_date: str = None, end_date: str = None) 
         .reset_index(drop=True)
     )
 
-    # Iterative future prediction — each model maintains its own silver history
+    # Iterative future prediction
     future_silver_hist_xgb  = list(df["silver"].values)
     future_silver_hist_lgbm = list(df["silver"].values)
     xgb_future_vals         = []
@@ -423,11 +423,6 @@ def run_forecast(period: int = 7, start_date: str = None, end_date: str = None) 
         "usd_to_idr":       usd_to_idr,
     }
 
-
-
-# HELPER: ambil harga aktual untuk tanggal-tanggal forecast yang sudah lampau
-
-
 def _fetch_usd_to_idr() -> float:
     """Ambil kurs USD/IDR terkini dari yfinance (ticker USDIDR=X)."""
     try:
@@ -439,7 +434,7 @@ def _fetch_usd_to_idr() -> float:
                 return price
     except Exception:
         pass
-    return 15800.0  # fallback jika gagal fetch
+    return 15800.0
 
 
 def _fetch_future_actual(future_forecast: list, last_date: pd.Timestamp) -> list:
@@ -476,7 +471,7 @@ def _fetch_future_actual(future_forecast: list, last_date: pd.Timestamp) -> list
 
 
 
-# TRAIN & SAVE — latih model sekali, simpan ke disk
+# TRAIN & SAVE
 
 
 def _build_feature_cols() -> list:
@@ -515,22 +510,11 @@ def get_model_status() -> dict:
 
 
 def train_and_save(start_date: str = None, end_date: str = None) -> dict:
-    """
-    Latih model dengan DIRECT MULTI-STEP FORECASTING.
-
-    Pendekatan: untuk setiap titik waktu t, model memprediksi log return kumulatif
-    log(silver[t+h] / silver[t]) untuk h = 1..30 hari sekaligus, menggunakan fitur
-    yang hanya berasal dari data di t dan sebelumnya — tanpa rekursi, tanpa akumulasi error.
-
-    Evaluasi menggunakan rolling 1-step-ahead TANPA teacher forcing, sehingga metrik
-    mencerminkan akurasi prediksi nyata, bukan performa pada kondisi ideal.
-    """
     os.makedirs(SAVE_DIR, exist_ok=True)
 
     raw = fetch_data(start_date, end_date)
-    df  = build_features(raw)  # lag/rolling/teknikal, semua tanpa look-ahead
+    df  = build_features(raw)
 
-    #  Prophet: ekstraksi komponen tren & musiman di setiap titik t 
     m_prod = _fit_prophet(df)
     ph_all = _get_prophet_components(m_prod, df[["ds"]].copy())
     for col in ["yhat", "trend", "weekly", "yearly"]:
@@ -538,8 +522,6 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
 
     feature_cols = _build_feature_cols()
 
-    #  Bangun target direct multi-step 
-    # Y[t, h-1] = log(silver[t+h] / silver[t])  untuk h = 1..MAX_H
     MAX_H  = 30
     prices = df["silver"].values
     n      = len(prices)
@@ -548,14 +530,13 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
         base = np.where(prices[:n - h] > 0, prices[:n - h], 1e-9)
         Y[:n - h, h - 1] = np.log(prices[h:] / base)
 
-    # Baris valid: fitur dan target keduanya lengkap
     feat_ok   = df[feature_cols].notna().all(axis=1).values
     targ_ok   = ~np.isnan(Y).any(axis=1)
     valid_mask = feat_ok & targ_ok
     df_v   = df[valid_mask].reset_index(drop=True)
     Y_v    = Y[valid_mask]
     X_all  = df_v[feature_cols].values
-    prc_v  = df_v["silver"].values   # harga aktual tiap baris valid
+    prc_v  = df_v["silver"].values 
 
     n_v       = len(df_v)
     test_size = max(TEST_SIZE, int(n_v * 0.2))
@@ -564,7 +545,6 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
     X_tr, X_te = X_all[:split], X_all[split:]
     Y_tr        = Y_v[:split]
 
-    #  Base estimators (n_jobs=1 karena MultiOutputRegressor sudah paralel) 
     xgb_base = XGBRegressor(
         n_estimators=400, learning_rate=0.05, max_depth=5,
         subsample=0.8, colsample_bytree=0.7,
@@ -578,14 +558,12 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
         n_jobs=1, random_state=42, verbose=-1,
     )
 
-    #  Eval models (hanya train set) 
+    #  Eval models 
     print("  [1/4] Melatih XGBoost eval...")
     xgb_eval  = MultiOutputRegressor(xgb_base,  n_jobs=-1).fit(X_tr, Y_tr)
     print("  [2/4] Melatih LightGBM eval...")
     lgbm_eval = MultiOutputRegressor(lgbm_base, n_jobs=-1).fit(X_tr, Y_tr)
 
-    #  Evaluasi jujur: rolling 1-step-ahead (tanpa teacher forcing) 
-    # Di setiap titik test t, gunakan fitur t-1 untuk prediksi harga t
     xgb_preds, lgbm_preds, actuals, eval_dates = [], [], [], []
     for i in range(test_size):
         t = split + i
@@ -621,7 +599,7 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
         for i in range(n_eval)
     ]
 
-    #  Production models (semua data valid) 
+    # Production models
     print("  [3/4] Melatih XGBoost production...")
     xgb_prod  = MultiOutputRegressor(xgb_base,  n_jobs=-1).fit(X_all, Y_v)
     print("  [4/4] Melatih LightGBM production...")
@@ -635,7 +613,7 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
         for _, r in df.iterrows()
     ]
 
-    #  Simpan ke disk 
+    # Simpan ke disk 
     joblib.dump(xgb_prod,  os.path.join(SAVE_DIR, "xgb_prod.joblib"))
     joblib.dump(lgbm_prod, os.path.join(SAVE_DIR, "lgbm_prod.joblib"))
     with open(os.path.join(SAVE_DIR, "prophet_prod.json"), "w") as f:
@@ -666,17 +644,9 @@ def train_and_save(start_date: str = None, end_date: str = None) -> dict:
         "lightgbm":         lightgbm_met,
     }
 
-
-
-# PREDICT FROM SAVED — load model, direct inference dalam sekali panggil
-
+# PREDICT FROM SAVED
 
 def predict_from_saved(period: int = 7) -> dict:
-    """
-    Load model dari disk dan jalankan direct multi-step inference.
-    Fitur dihitung SEKALI dari titik data terakhir, lalu model menghasilkan
-    semua prediksi 1..30 hari sekaligus — tidak ada rekursi.
-    """
     with open(os.path.join(SAVE_DIR, "metadata.json")) as f:
         meta = json.load(f)
 
@@ -689,7 +659,7 @@ def predict_from_saved(period: int = 7) -> dict:
     with open(os.path.join(SAVE_DIR, "prophet_prod.json")) as f:
         m_prod = model_from_dict(json.load(f))
 
-    # Tanggal business days ke depan (selalu generate 30, potong sesuai period)
+    # Tanggal business days ke depan (30 days)
     future_range  = m_prod.make_future_dataframe(periods=30, freq="B")
     ph_future_all = _get_prophet_components(m_prod, future_range)
     ph_future = (
@@ -698,7 +668,7 @@ def predict_from_saved(period: int = 7) -> dict:
         .reset_index(drop=True)
     )
 
-    # Komponen Prophet di last_date (untuk fitur)
+    # Komponen Prophet fitur
     ph_last = _get_prophet_components(m_prod, pd.DataFrame({"ds": [last_date]}))
 
     # Bangun satu feature vector di titik data terakhir
@@ -710,9 +680,8 @@ def predict_from_saved(period: int = 7) -> dict:
         last_date, feature_cols,
     ).reshape(1, -1)
 
-    # Prediksi semua 30 log return dalam sekali panggil
-    log_rets_xgb  = xgb_prod.predict(X_pred)[0]   # shape (30,)
-    log_rets_lgbm = lgbm_prod.predict(X_pred)[0]  # shape (30,)
+    log_rets_xgb  = xgb_prod.predict(X_pred)[0]
+    log_rets_lgbm = lgbm_prod.predict(X_pred)[0]
     last_price    = float(last_rows["silver"][-1])
 
     # price[t+h] = last_price * exp(cumulative_log_return_h)
