@@ -279,8 +279,8 @@ export default function HasilPage() {
                         </div>
                         <p className="text-xs text-gray-400 mb-5">{tag}</p>
                         <div className="grid gap-3">
-                            <MetricCard label="MAE (Mean Absolute Error)"              value={data?.mae  ?? null} isPrice currency={currency} rate={rate} />
-                            <MetricCard label="RMSE (Root Mean Square Error)"          value={data?.rmse ?? null} isPrice currency={currency} rate={rate} />
+                            <MetricCard label="MAE (Mean Absolute Error)"              value={data?.mae  ?? null} currency={currency} rate={rate} />
+                            <MetricCard label="RMSE (Root Mean Square Error)"          value={data?.rmse ?? null} currency={currency} rate={rate} />
                             <MetricCard label="MAPE (Mean Absolute Percentage Error)"  value={data?.mape ?? null} unit="%" currency={currency} rate={rate} />
                             <MetricCard label="R² Score"                               value={data?.r2   ?? null} currency={currency} rate={rate} />
                         </div>
