@@ -3,9 +3,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navLinks = [
-    { href: "/", label: "Beranda" },
+    { href: "/", label: "Home" },
     { href: "/prediksi-cepat", label: "Prediksi" },
     { href: "/hasil", label: "Hasil" },
+    { href: "/about", label: "About" },
+    { href: "/help", label: "Help" },
 ];
 
 export default function Navbar() {

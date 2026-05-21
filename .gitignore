@@ -8,7 +8,7 @@ venv/
 env/
 .env
 
-# Model artifacts (bisa besar, tidak perlu di-commit)
+# Model artifacts
 backend/models/saved/
 backend/models/saved_v2/
 
@@ -25,15 +25,11 @@ frontend/.vercel
 .DS_Store
 Thumbs.db
 
-# Claude / Agents
-.claude/
-agents.md
-claude.md
-AGENTS.md
-CLAUDE.md
-
 # Ignored Files
 LAMPIRAN 1.txt
 prediksisilver-production.up.railwa.txt
 kalkulasi_manual.ipynb
+kalkulasi_manual_*.ipynb
 create_notebook.py
+generate_5_variants.py
+update_ipynb.py

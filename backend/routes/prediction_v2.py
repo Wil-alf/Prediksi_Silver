@@ -4,6 +4,7 @@ from models.forecaster_v2 import (
     train_and_save_v2,
     predict_from_saved_v2,
     is_model_saved_v2,
+    train_and_predict_adhoc_v2,
 )
 
 prediction_v2_bp = Blueprint("prediction_v2", __name__)
@@ -39,6 +40,24 @@ def predict():
 
     try:
         result = predict_from_saved_v2(period=int(period), end_date=end_date)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@prediction_v2_bp.route("/predict-adhoc", methods=["POST"])
+def predict_adhoc():
+    body        = request.get_json(silent=True) or {}
+    period      = body.get("period", 7)
+    cutoff_date = body.get("cutoff_date")
+
+    if not cutoff_date:
+        return jsonify({"error": "cutoff_date wajib diisi"}), 400
+    if period not in (7, 30):
+        return jsonify({"error": "period harus 7 atau 30"}), 400
+
+    try:
+        result = train_and_predict_adhoc_v2(int(period), cutoff_date)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500

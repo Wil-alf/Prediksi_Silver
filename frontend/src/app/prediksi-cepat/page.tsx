@@ -11,6 +11,7 @@ import {
     getModelStatusV2,
     trainModelV2,
     runPredictionV2,
+    runPredictionAdhocV2,
     getHistoricalData,
     type HistoricalRow,
     type ModelStatusV2,
@@ -20,8 +21,13 @@ function formatDate(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
-const TODAY    = formatDate(new Date());
+const TODAY = formatDate(new Date());
 const MIN_DATE = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return formatDate(d); })();
+
+function fmtDate(d: string): string {
+    const [y, m, day] = d.split("-");
+    return `${m}/${day}/${y.slice(2)}`;
+}
 
 function formatTrainedAt(iso: string): string {
     const d = new Date(iso);
@@ -29,15 +35,15 @@ function formatTrainedAt(iso: string): string {
 }
 
 export default function PrediksiCepatPage() {
-    const [period, setPeriod]           = useState<7 | 30>(7);
-    const [endDate, setEndDate]         = useState(TODAY);
-    const [startDate, setStartDate]     = useState(MIN_DATE);
-    const [historical, setHistorical]   = useState<HistoricalRow[]>([]);
+    const [period, setPeriod] = useState<7 | 30>(7);
+    const [endDate, setEndDate] = useState(TODAY);
+    const [startDate, setStartDate] = useState(MIN_DATE);
+    const [historical, setHistorical] = useState<HistoricalRow[]>([]);
     const [histLoading, setHistLoading] = useState(true);
     const [modelStatus, setModelStatus] = useState<ModelStatusV2>({ trained: false });
     const [statusLoading, setStatusLoading] = useState(true);
-    const [training, setTraining]       = useState(false);
-    const [predicting, setPredicting]   = useState(false);
+    const [training, setTraining] = useState(false);
+    const [predicting, setPredicting] = useState(false);
     const router = useRouter();
 
     // Load model status on mount
@@ -82,10 +88,17 @@ export default function PrediksiCepatPage() {
         }
     };
 
+    const isPastDate = modelStatus.trained &&
+        !!modelStatus.last_actual_date &&
+        !!endDate &&
+        endDate < modelStatus.last_actual_date;
+
     const handlePredict = async () => {
         setPredicting(true);
         try {
-            const result = await runPredictionV2(period, endDate || undefined);
+            const result = isPastDate
+                ? await runPredictionAdhocV2(period, endDate)
+                : await runPredictionV2(period, endDate || undefined);
             sessionStorage.setItem("predictionResult", JSON.stringify(result));
             router.push("/hasil");
         } catch (err: unknown) {
@@ -104,7 +117,7 @@ export default function PrediksiCepatPage() {
     };
 
     const dateRangeInvalid = !startDate || !endDate || startDate >= endDate;
-    const tickInterval     = historical.length > 0 ? Math.floor(historical.length / 6) : 30;
+    const tickInterval = historical.length > 0 ? Math.floor(historical.length / 6) : 30;
 
     return (
         <div className="max-w-6xl mx-auto px-6 py-10 bg-gray-50">
@@ -116,7 +129,7 @@ export default function PrediksiCepatPage() {
                 <h1 className="text-3xl font-bold text-gray-800">Prediksi</h1>
             </div>
             <p className="text-gray-500 mb-8">
-                Latih model sekali, prediksi berulang kali dalam hitungan detik.
+                Latih model sekali, prediksi dapat dilakukan berulang kali.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -135,7 +148,7 @@ export default function PrediksiCepatPage() {
                                 <div>
                                     <p className="text-sm font-medium text-gray-800">Model siap digunakan</p>
                                     <p className="text-xs text-gray-500 mt-0.5">
-                                        Data hingga: <span className="font-medium">{modelStatus.last_actual_date}</span>
+                                        Data hingga: <span className="font-medium">{fmtDate(modelStatus.last_actual_date!)}</span>
                                     </p>
                                     <p className="text-xs text-gray-400">
                                         Dilatih: {modelStatus.trained_at ? formatTrainedAt(modelStatus.trained_at) : "—"}
@@ -189,7 +202,7 @@ export default function PrediksiCepatPage() {
                             ))}
                         </div>
 
-                        <p className="text-sm text-gray-800 mb-1">Titik Awal Prediksi</p>
+                        <p className="text-sm text-gray-800 mb-1">Tanggal Awal Prediksi</p>
                         <p className="text-xs text-gray-400 mb-3">
                             Model akan memprediksi hari-hari setelah tanggal ini
                         </p>
@@ -205,10 +218,10 @@ export default function PrediksiCepatPage() {
                         <p className="text-sm text-gray-500 mb-3">Variabel Multivariat</p>
                         <div className="flex flex-col gap-1.5 mb-6">
                             {[
-                                { label: "Harga Perak (SI=F)",          color: "bg-indigo-500" },
-                                { label: "Harga Emas (GC=F)",           color: "bg-yellow-500" },
-                                { label: "Harga Minyak (CL=F)",         color: "bg-orange-500" },
-                                { label: "Nilai Tukar USD (DX-Y.NYB)",  color: "bg-green-500" },
+                                { label: "Harga Perak (SI=F)", color: "bg-indigo-500" },
+                                { label: "Harga Emas (GC=F)", color: "bg-yellow-500" },
+                                { label: "Harga Minyak (CL=F)", color: "bg-orange-500" },
+                                { label: "Nilai Tukar USD (DX-Y.NYB)", color: "bg-green-500" },
                             ].map(({ label, color }) => (
                                 <div key={label} className="flex items-center gap-2 text-sm text-gray-700">
                                     <span className={`w-2 h-2 rounded-full ${color} inline-block`} />
@@ -274,7 +287,7 @@ export default function PrediksiCepatPage() {
                             <AreaChart data={historical} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                                 <defs>
                                     <linearGradient id="silverGradV2" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.3} />
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
@@ -282,7 +295,7 @@ export default function PrediksiCepatPage() {
                                 <XAxis
                                     dataKey="date"
                                     tick={{ fontSize: 10 }}
-                                    tickFormatter={(v: string) => v.slice(5)}
+                                    tickFormatter={(v: string) => fmtDate(v).slice(0, 5)}
                                     interval={tickInterval}
                                 />
                                 <YAxis
@@ -293,7 +306,7 @@ export default function PrediksiCepatPage() {
                                 />
                                 <Tooltip
                                     formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Harga Perak"]}
-                                    labelFormatter={(l: any) => `Tanggal: ${l}`}
+                                    labelFormatter={(l: any) => `Tanggal: ${fmtDate(l)}`}
                                 />
                                 <Area
                                     type="monotone"

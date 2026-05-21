@@ -19,9 +19,9 @@ from sklearn.multioutput import MultiOutputRegressor
 TICKERS = {"silver": "SI=F", "gold": "GC=F", "oil": "CL=F", "usd": "DX-Y.NYB"}
 LAG_DAYS        = [1, 2, 3, 5, 7, 10, 14]
 ROLLING_WINDOWS = [5, 10, 20, 30]
-TEST_SIZE       = 30   # jumlah baris yang ditampilkan di chart
+TEST_SIZE       = 30
 SERIES_LIST     = ["silver", "gold", "oil", "usd"]
-HIST_TAIL       = 100  # baris terakhir yang disimpan untuk konstruksi fitur saat inference
+HIST_TAIL       = 100
 SAVE_DIR        = os.path.join(os.path.dirname(__file__), "saved")
 
 
@@ -54,7 +54,6 @@ def fetch_data(start_date: str = None, end_date: str = None) -> pd.DataFrame:
 
 
 def _ema_arr(arr: np.ndarray, span: int) -> float:
-    """EMA over a numpy array"""
     alpha = 2.0 / (span + 1)
     ema   = float(arr[0])
     for v in arr[1:]:
@@ -424,7 +423,6 @@ def run_forecast(period: int = 7, start_date: str = None, end_date: str = None) 
     }
 
 def _fetch_usd_to_idr() -> float:
-    """Ambil kurs USD/IDR terkini dari yfinance (ticker USDIDR=X)."""
     try:
         raw = yf.download("USDIDR=X", period="5d", interval="1d",
                           auto_adjust=True, progress=False)
@@ -469,10 +467,7 @@ def _fetch_future_actual(future_forecast: list, last_date: pd.Timestamp) -> list
     except Exception:
         return []
 
-
-
 # TRAIN & SAVE
-
 
 def _build_feature_cols() -> list:
     price_lag_cols = [f"{s}_lag_{d}"     for s in SERIES_LIST for d in LAG_DAYS]

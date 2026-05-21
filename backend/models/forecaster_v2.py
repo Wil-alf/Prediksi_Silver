@@ -26,8 +26,9 @@ from models.forecaster import (
     TEST_SIZE,
 )
 
-SAVE_DIR_V2 = os.path.join(os.path.dirname(__file__), "saved_v2")
-HIST_TAIL   = 100
+SAVE_DIR_V2      = os.path.join(os.path.dirname(__file__), "saved_v2")
+SAVE_DIR_V2_TEMP = os.path.join(os.path.dirname(__file__), "saved_v2_temp")
+HIST_TAIL        = 100
 
 
 def _build_feature_cols() -> list:
@@ -65,8 +66,9 @@ def get_model_status_v2() -> dict:
     }
 
 
-def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
-    os.makedirs(SAVE_DIR_V2, exist_ok=True)
+def train_and_save_v2(start_date: str = None, end_date: str = None, save_dir: str = None) -> dict:
+    target_dir = save_dir or SAVE_DIR_V2
+    os.makedirs(target_dir, exist_ok=True)
 
     raw = fetch_data(start_date, end_date)
     df  = build_features(raw)
@@ -157,10 +159,10 @@ def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
         for _, row in df.iterrows()
     ]
 
-    #  Save to disk 
-    joblib.dump(xgb_prod,  os.path.join(SAVE_DIR_V2, "xgb_prod.joblib"))
-    joblib.dump(lgbm_prod, os.path.join(SAVE_DIR_V2, "lgbm_prod.joblib"))
-    with open(os.path.join(SAVE_DIR_V2, "prophet_prod.json"), "w", encoding="utf-8") as f:
+    #  Save to disk
+    joblib.dump(xgb_prod,  os.path.join(target_dir, "xgb_prod.joblib"))
+    joblib.dump(lgbm_prod, os.path.join(target_dir, "lgbm_prod.joblib"))
+    with open(os.path.join(target_dir, "prophet_prod.json"), "w", encoding="utf-8") as f:
         json.dump(model_to_dict(m_prod), f)
 
     trained_at = _dt.now().isoformat()
@@ -176,7 +178,7 @@ def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
         "xgboost_metrics":  xgboost_met,
         "lightgbm_metrics": lightgbm_met,
     }
-    with open(os.path.join(SAVE_DIR_V2, "metadata.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(target_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(metadata, f)
 
     return {
@@ -188,15 +190,16 @@ def train_and_save_v2(start_date: str = None, end_date: str = None) -> dict:
     }
 
 
-def predict_from_saved_v2(period: int = 7, end_date: str = None) -> dict:
-    with open(os.path.join(SAVE_DIR_V2, "metadata.json"), encoding="utf-8") as f:
+def predict_from_saved_v2(period: int = 7, end_date: str = None, save_dir: str = None) -> dict:
+    target_dir = save_dir or SAVE_DIR_V2
+    with open(os.path.join(target_dir, "metadata.json"), encoding="utf-8") as f:
         meta = json.load(f)
 
     feature_cols = meta["feature_cols"]
 
-    xgb_prod  = joblib.load(os.path.join(SAVE_DIR_V2, "xgb_prod.joblib"))
-    lgbm_prod = joblib.load(os.path.join(SAVE_DIR_V2, "lgbm_prod.joblib"))
-    with open(os.path.join(SAVE_DIR_V2, "prophet_prod.json"), encoding="utf-8") as f:
+    xgb_prod  = joblib.load(os.path.join(target_dir, "xgb_prod.joblib"))
+    lgbm_prod = joblib.load(os.path.join(target_dir, "lgbm_prod.joblib"))
+    with open(os.path.join(target_dir, "prophet_prod.json"), encoding="utf-8") as f:
         m_prod = model_from_dict(json.load(f))
 
     if end_date:
@@ -288,3 +291,12 @@ def predict_from_saved_v2(period: int = 7, end_date: str = None) -> dict:
         "historical":       historical,
         "usd_to_idr":       usd_to_idr,
     }
+
+
+def train_and_predict_adhoc_v2(period: int, cutoff_date: str) -> dict:
+    import shutil
+    try:
+        train_and_save_v2(end_date=cutoff_date, save_dir=SAVE_DIR_V2_TEMP)
+        return predict_from_saved_v2(period=period, save_dir=SAVE_DIR_V2_TEMP)
+    finally:
+        shutil.rmtree(SAVE_DIR_V2_TEMP, ignore_errors=True)

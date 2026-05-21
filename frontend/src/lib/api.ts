@@ -82,3 +82,11 @@ export async function runPredictionV2(period: 7 | 30, endDate?: string): Promise
     const { data } = await api.post<PredictResponse>("/api/v2/predict", body);
     return data;
 }
+
+export async function runPredictionAdhocV2(period: 7 | 30, cutoffDate: string): Promise<PredictResponse> {
+    const { data } = await api.post<PredictResponse>("/api/v2/predict-adhoc", {
+        period,
+        cutoff_date: cutoffDate,
+    });
+    return data;
+}

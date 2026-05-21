@@ -18,6 +18,11 @@ function formatDate(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
+function fmtDate(d: string): string {
+    const [y, m, day] = d.split("-");
+    return `${m}/${day}/${y.slice(2)}`;
+}
+
 const TODAY    = formatDate(new Date());
 const MIN_DATE = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return formatDate(d); })();
 
@@ -138,7 +143,7 @@ export default function PrediksiPage() {
                 {/* Historical Chart */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
                     <h2 className="font-semibold text-lg mb-1 text-gray-800">Data Historis Harga Perak</h2>
-                    <p className="text-xs text-gray-500 mb-3">Pratinjau data · sumber Yahoo Finance</p>
+                    <p className="text-xs text-gray-500 mb-3">Pratinjau data Yahoo Finance</p>
 
                     {/* Date pickers untuk pratinjau grafik */}
                     <div className="flex gap-2 mb-4">
@@ -185,7 +190,7 @@ export default function PrediksiPage() {
                                 <XAxis
                                     dataKey="date"
                                     tick={{ fontSize: 10 }}
-                                    tickFormatter={(v: string) => v.slice(5)}
+                                    tickFormatter={(v: string) => fmtDate(v).slice(0, 5)}
                                     interval={tickInterval}
                                 />
                                 <YAxis
@@ -196,7 +201,7 @@ export default function PrediksiPage() {
                                 />
                                 <Tooltip
                                     formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Harga Perak"]}
-                                    labelFormatter={(l: any) => `Tanggal: ${l}`}
+                                    labelFormatter={(l: any) => `Tanggal: ${fmtDate(l)}`}
                                 />
                                 <Area
                                     type="monotone"

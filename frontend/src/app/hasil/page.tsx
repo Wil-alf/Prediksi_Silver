@@ -16,6 +16,11 @@ import type { PredictResponse } from "@/lib/api";
 
 type Currency = "USD" | "IDR";
 
+function fmtDate(d: string): string {
+    const [y, m, day] = d.split("-");
+    return `${m}/${day}/${y.slice(2)}`;
+}
+
 // Format helpers
 
 function fmtPrice(usd: number, currency: Currency, rate: number): string {
@@ -128,7 +133,7 @@ export default function HasilPage() {
                     <h1 className="text-3xl font-bold mb-1">Hasil Prediksi</h1>
                     <p className="text-gray-500">
                         {result
-                            ? `Prediksi ${result.period} hari ke depan · berdasarkan data hingga ${result.last_actual_date}`
+                            ? `Prediksi ${result.period} hari ke depan · berdasarkan data hingga ${fmtDate(result.last_actual_date)}`
                             : "Menunggu data prediksi..."}
                     </p>
                     {result && (
@@ -159,7 +164,7 @@ export default function HasilPage() {
                 </div>
                 <p className="text-xs text-gray-400 mb-4">
                     {result?.future_forecast?.length
-                        ? `${result.future_forecast[0].date} sampai dengan ${result.future_forecast[result.future_forecast.length - 1].date}`
+                        ? `${fmtDate(result.future_forecast[0].date)} sampai dengan ${fmtDate(result.future_forecast[result.future_forecast.length - 1].date)}`
                         : "Rentang tanggal prediksi"}
                 </p>
 
@@ -170,7 +175,7 @@ export default function HasilPage() {
                             <XAxis
                                 dataKey="date"
                                 tick={{ fontSize: 10 }}
-                                tickFormatter={(v: string) => v.slice(5)}
+                                tickFormatter={(v: string) => fmtDate(v).slice(0, 5)}
                                 interval={futureTickInterval}
                             />
                             <YAxis
@@ -179,7 +184,7 @@ export default function HasilPage() {
                                 tickFormatter={(v: number) => fmtAxis(v, currency, rate)}
                                 width={currency === "IDR" ? 72 : 52}
                             />
-                            <Tooltip formatter={tooltipFmt} labelFormatter={(l: any) => `Tanggal: ${l}`} />
+                            <Tooltip formatter={tooltipFmt} labelFormatter={(l: any) => `Tanggal: ${fmtDate(l)}`} />
                             <Legend formatter={(v: string) => MODEL_LABELS[v] ?? v} />
                             {hasActualForecast && (
                                 <Line type="monotone" dataKey="actual" stroke="#64748b" strokeWidth={2}
@@ -225,7 +230,7 @@ export default function HasilPage() {
                                     const diff2 = row.actual !== null ? Math.abs((row.actual as number) - row.lightgbm) : null;
                                     return (
                                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                                            <td className="py-2 pr-6 font-medium">{row.date}</td>
+                                            <td className="py-2 pr-6 font-medium">{fmtDate(row.date)}</td>
                                             {hasActualForecast && (
                                                 <td className="py-2 pr-6 text-gray-700 font-medium">
                                                     {row.actual !== null ? fmtPrice(row.actual as number, currency, rate) : "–"}
@@ -301,7 +306,7 @@ export default function HasilPage() {
                             <XAxis
                                 dataKey="date"
                                 tick={{ fontSize: 10 }}
-                                tickFormatter={(v: string) => v.slice(5)}
+                                tickFormatter={(v: string) => fmtDate(v).slice(0, 5)}
                                 interval={testTickInterval}
                             />
                             <YAxis
@@ -310,7 +315,7 @@ export default function HasilPage() {
                                 tickFormatter={(v: number) => fmtAxis(v, currency, rate)}
                                 width={currency === "IDR" ? 72 : 52}
                             />
-                            <Tooltip formatter={tooltipFmt} labelFormatter={(l: any) => `Tanggal: ${l}`} />
+                            <Tooltip formatter={tooltipFmt} labelFormatter={(l: any) => `Tanggal: ${fmtDate(l)}`} />
                             <Legend formatter={(v: string) => MODEL_LABELS[v] ?? v} />
                             <Line type="monotone" dataKey="actual"   stroke="#64748b" strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="xgboost"  stroke="#6366f1" strokeWidth={2} dot={false} strokeDasharray="5 3" />
@@ -343,7 +348,7 @@ export default function HasilPage() {
                             {result?.test_comparison?.length ? (
                                 result.test_comparison.map((row, i) => (
                                     <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                                        <td className="py-2 pr-6">{row.date}</td>
+                                        <td className="py-2 pr-6">{fmtDate(row.date)}</td>
                                         <td className="py-2 pr-6 font-medium">
                                             {fmtPrice(row.actual, currency, rate)}
                                         </td>
