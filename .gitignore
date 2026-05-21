@@ -26,10 +26,4 @@ frontend/.vercel
 Thumbs.db
 
 # Ignored Files
-LAMPIRAN 1.txt
 prediksisilver-production.up.railwa.txt
-kalkulasi_manual.ipynb
-kalkulasi_manual_*.ipynb
-create_notebook.py
-generate_5_variants.py
-update_ipynb.py
